@@ -1,0 +1,559 @@
+/* ============================================
+   Wallet App — Synthwave Terminal
+   ============================================ */
+
+/* Reset & Base */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-deep: #0b0b0f;
+  --bg-surface: #13131a;
+  --bg-elevated: #1a1a24;
+  --border: #1e1e2e;
+  --border-hover: #2a2a3e;
+  --text-primary: #e0e0e5;
+  --text-secondary: #6b6b7b;
+  --text-muted: #4a4a5a;
+  --accent-pink: #ff2a6d;
+  --accent-cyan: #05d9e8;
+  --accent-pink-dim: #ff2a6d20;
+  --accent-cyan-dim: #05d9e820;
+  --negative: #ff3864;
+  --positive: #05d9e8;
+  --sidebar-width: 240px;
+  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+}
+
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-ui);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-deep);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ============================================
+   Layout
+   ============================================ */
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-width);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 10;
+}
+
+.sidebar-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+}
+
+.logo span {
+  color: var(--accent-pink);
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: color 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.nav-item:hover {
+  color: var(--text-primary);
+  background: var(--accent-pink-dim);
+}
+
+.nav-item.active {
+  color: var(--accent-pink);
+  background: var(--accent-pink-dim);
+  border-right: 2px solid var(--accent-pink);
+}
+
+.nav-item .nav-icon {
+  width: 18px;
+  height: 18px;
+  opacity: 0.6;
+}
+
+.nav-item.active .nav-icon,
+.nav-item:hover .nav-icon {
+  opacity: 1;
+}
+
+.sidebar-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Main Content */
+.main {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Top Bar */
+.topbar {
+  height: 56px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.topbar-left {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Network Badge */
+.network-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.network-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+}
+
+.network-dot.disconnected {
+  background: var(--text-muted);
+}
+
+/* Connect Button */
+.btn-connect {
+  padding: 8px 18px;
+  background: var(--accent-pink);
+  color: var(--bg-deep);
+  border: none;
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-connect:hover {
+  background: #ff4a85;
+}
+
+.btn-connect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Wallet Info (when connected) */
+.wallet-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wallet-address-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.wallet-address-btn:hover {
+  border-color: var(--border-hover);
+}
+
+.ens-name {
+  color: var(--accent-cyan);
+  font-size: 0.8rem;
+}
+
+/* Content Area */
+.content {
+  flex: 1;
+  padding: 28px;
+  max-width: 1200px;
+}
+
+/* Section */
+.section {
+  margin-bottom: 32px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.section-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Panel */
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Portfolio Value */
+.portfolio-value {
+  font-family: var(--font-mono);
+  font-size: 2.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.portfolio-change {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.portfolio-change.positive {
+  color: var(--positive);
+}
+
+.portfolio-change.negative {
+  color: var(--negative);
+}
+
+/* Table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 12px 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.data-table th:last-child {
+  text-align: right;
+}
+
+.data-table td {
+  padding: 14px 20px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.data-table td:last-child {
+  text-align: right;
+}
+
+.data-table tr:hover td {
+  background: var(--bg-elevated);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Token Row */
+.token-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.token-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.token-icon.eth { background: #627eea30; color: #627eea; }
+.token-icon.usdc { background: #2775ca30; color: #2775ca; }
+.token-icon.usdt { background: #26a17b30; color: #26a17b; }
+.token-icon.wbtc { background: #f7931a30; color: #f7931a; }
+.token-icon.link { background: #2a5ada30; color: #2a5ada; }
+
+.token-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.token-symbol {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.token-name {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.token-balance {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.token-value {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.token-change {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.token-change.positive { color: var(--positive); }
+.token-change.negative { color: var(--negative); }
+
+/* Transaction Row */
+.tx-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tx-type.send {
+  background: var(--negative);
+  color: var(--bg-deep);
+}
+
+.tx-type.receive {
+  background: var(--positive);
+  color: var(--bg-deep);
+}
+
+.tx-type.approve {
+  background: var(--accent-pink-dim);
+  color: var(--accent-pink);
+}
+
+.tx-hash {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.tx-time {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.tx-status {
+  font-size: 0.8rem;
+  color: var(--positive);
+}
+
+.tx-status.pending {
+  color: var(--accent-pink);
+}
+
+/* Empty State */
+.empty-state {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.empty-state-icon {
+  font-size: 2rem;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+
+/* Network Info Panel */
+.network-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1px;
+  background: var(--border);
+}
+
+.network-info-item {
+  background: var(--bg-surface);
+  padding: 16px 20px;
+}
+
+.network-info-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.network-info-value {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+/* Loading */
+.loading {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-pink);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Utility */
+.hidden {
+  display: none !important;
+}
+
+.text-mono {
+  font-family: var(--font-mono);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .main {
+    margin-left: 0;
+  }
+}

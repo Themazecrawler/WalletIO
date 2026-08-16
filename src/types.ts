@@ -19,7 +19,6 @@ export interface CryptoAsset {
   name: string;
   symbol: string;
   balance: number;
-  priceUsd: number;
   change24h: number;
   sparkline: number[];
   icon: string;
@@ -27,6 +26,9 @@ export interface CryptoAsset {
   borderClass: string;
   textClass: string;
 }
+
+/** Live market prices keyed by asset symbol (e.g. 'BTC', 'ETH', 'WIO'). */
+export type PriceMap = Record<string, number>;
 
 export interface Contact {
   id: string;

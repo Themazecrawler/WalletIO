@@ -1,36 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Activity, Flame, TrendingUp, TrendingDown, HelpCircle, Newspaper, ArrowUpRight, DollarSign, Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { Transaction } from '../types';
+import { useWallet } from '../store/walletStore';
+import { usePriceFeed } from '../store/priceFeed';
+import { formatUsd, formatCrypto } from '../lib/format';
 
 interface MarketTerminalProps {
   onShowNotification: (msg: string) => void;
-  liquidityBalance: number;
-  onUpdateLiquidity: (newVal: number) => void;
 }
 
-export default function MarketTerminal({ onShowNotification, liquidityBalance, onUpdateLiquidity }: MarketTerminalProps) {
+const WIO_ASSET_ID = 'asset-wio';
+
+export default function MarketTerminal({ onShowNotification }: MarketTerminalProps) {
+  const { assets, liquidityBalance, dispatch } = useWallet();
+  const prices = usePriceFeed();
   const [activeInterval, setActiveInterval] = useState<'1H' | '4H' | '1D'>('4H');
   const [showSwapDesk, setShowSwapDesk] = useState(false);
   const [sellAsset, setSellAsset] = useState('USD');
-  const [buyAsset, setBuyAsset] = useState('AUR');
+  const [buyAsset, setBuyAsset] = useState('WIO');
   const [swapAmount, setSwapAmount] = useState('');
-  const [swapLoading, setSwapSwapLoading] = useState(false);
+  const [swapLoading, setSwapLoading] = useState(false);
 
-  // Simulated live fluctuating pricing state
-  const [aurPrice, setAurPrice] = useState(0.18);
-  const [btcPrice, setBtcPrice] = useState(64120.50);
-  const [ethPrice, setEthPrice] = useState(3481.12);
-  const [solPrice, setSolPrice] = useState(145.22);
-
-  useEffect(() => {
-    const priceInterval = setInterval(() => {
-      // Subtle fluctuations
-      setAurPrice(prev => Math.max(0.12, prev + (Math.random() - 0.5) * 0.005));
-      setBtcPrice(prev => prev + (Math.random() - 0.5) * 45);
-      setEthPrice(prev => prev + (Math.random() - 0.5) * 2.5);
-      setSolPrice(prev => prev + (Math.random() - 0.5) * 0.4);
-    }, 3000);
-    return () => clearInterval(priceInterval);
-  }, []);
+  const wioPrice = prices.WIO ?? 0.18;
+  const wioBalance = assets.find((a) => a.id === WIO_ASSET_ID)?.balance ?? 0;
 
   const handleSwapExecute = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,40 +36,78 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
       onShowNotification('Insufficient USD Liquidity balance inside your wallet.');
       return;
     }
+    if (sellAsset === 'WIO' && wioBalance < amountVal) {
+      onShowNotification(`Insufficient WIO balance inside your wallet.`);
+      return;
+    }
 
-    setSwapSwapLoading(true);
+    setSwapLoading(true);
 
     setTimeout(() => {
-      setSwapSwapLoading(false);
+      setSwapLoading(false);
       setShowSwapDesk(false);
 
+      let txAmount: number;
+      let txType: 'inbound' | 'outbound';
+      let notifyMsg: string;
+
       if (sellAsset === 'USD') {
-        const boughtCoins = amountVal / aurPrice;
-        onUpdateLiquidity(liquidityBalance - amountVal);
-        onShowNotification(`Succeeded! Swapped $${amountVal.toFixed(2)} for ${boughtCoins.toFixed(2)} AUR instantly!`);
+        const boughtCoins = amountVal / wioPrice;
+        dispatch({ type: 'SET_LIQUIDITY', balance: liquidityBalance - amountVal });
+        dispatch({
+          type: 'UPDATE_ASSET_BALANCE',
+          assetId: WIO_ASSET_ID,
+          newBalance: wioBalance + boughtCoins,
+        });
+        txAmount = -amountVal;
+        txType = 'outbound';
+        notifyMsg = `Succeeded! Swapped $${amountVal.toFixed(2)} for ${formatCrypto(boughtCoins)} WIO instantly!`;
       } else {
-        const soldCoinsValue = amountVal * aurPrice;
-        onUpdateLiquidity(liquidityBalance + soldCoinsValue);
-        onShowNotification(`Succeeded! Sold ${amountVal} AUR for $${soldCoinsValue.toFixed(2)} USD!`);
+        const soldCoinsValue = amountVal * wioPrice;
+        dispatch({ type: 'SET_LIQUIDITY', balance: liquidityBalance + soldCoinsValue });
+        dispatch({
+          type: 'UPDATE_ASSET_BALANCE',
+          assetId: WIO_ASSET_ID,
+          newBalance: wioBalance - amountVal,
+        });
+        txAmount = soldCoinsValue;
+        txType = 'inbound';
+        notifyMsg = `Succeeded! Sold ${formatCrypto(amountVal)} WIO for $${formatUsd(soldCoinsValue)} USD!`;
       }
+
+      const newTx: Transaction = {
+        id: `tx-swap-${Date.now()}`,
+        title: 'Market Swap: WIO/USD',
+        subtitle: sellAsset === 'USD' ? 'Executed Buy Order' : 'Executed Sell Order',
+        amount: txAmount,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: 'Today',
+        category: 'Market',
+        status: 'SETTLED',
+        type: txType,
+        iconName: 'monitoring',
+        currencySymbol: 'USD'
+      };
+      dispatch({ type: 'ADD_TRANSACTION', transaction: newTx });
+
+      onShowNotification(notifyMsg);
       setSwapAmount('');
     }, 1800);
   };
 
   return (
     <div className="flex flex-col gap-6 p-6 animate-fade-in pb-10">
-      
       {/* Candlestick / Market Feed Header */}
       <section className="glass-card rounded-[24px] p-5 relative overflow-hidden bg-zinc-900/35 border border-cyan-500/15">
         <div className="flex justify-between items-start mb-4">
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <span className="font-display text-lg font-bold text-slate-100">AUR/USD</span>
+              <span className="font-display text-lg font-bold text-slate-100">WIO/USD</span>
               <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
                 +4.28%
               </span>
             </div>
-            
+
             <div className="font-mono text-[9px] text-[#00f0ff] flex items-center gap-1.5 font-bold">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
               LIVE FEED • CYBER-TERM v7
@@ -105,7 +135,7 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
         <div className="h-44 relative bg-zinc-950/20 border border-zinc-800/20 rounded-xl overflow-hidden mt-3 p-4 flex items-end justify-between gap-1">
           {/* Mock vertical grid lines */}
           <div className="absolute inset-0 grid grid-cols-5 divide-x divide-zinc-800/10 pointer-events-none" />
-          
+
           {/* simulated candlesticks */}
           {[
             { high: 80, low: 20, bodyTop: 40, bodyHeight: 30, color: 'bg-rose-500/80 shadow-[0_0_8px_rgba(244,63,94,0.3)]' },
@@ -118,8 +148,8 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
               {/* High / Low line */}
               <div className="w-0.5 bg-zinc-700/60 absolute top-2 bottom-2" />
               {/* Main candle body */}
-              <div 
-                className={`w-4 rounded-sm absolute ${bar.color}`} 
+              <div
+                className={`w-4 rounded-sm absolute ${bar.color}`}
                 style={{ top: `${bar.bodyTop}px`, height: `${bar.bodyHeight}px` }}
               />
             </div>
@@ -175,7 +205,7 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
             </div>
             <div className="text-right">
               <div className="text-xs font-mono font-bold text-slate-200">
-                ${btcPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${formatUsd(prices.BTC ?? 0)}
               </div>
               <div className="font-mono text-[10px] text-emerald-400 flex items-center justify-end gap-0.5">
                 <TrendingUp className="w-2.5 h-2.5" /> +2.15%
@@ -196,7 +226,7 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
             </div>
             <div className="text-right">
               <div className="text-xs font-mono font-bold text-slate-200">
-                ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${formatUsd(prices.ETH ?? 0)}
               </div>
               <div className="font-mono text-[10px] text-rose-400 flex items-center justify-end gap-0.5">
                 <TrendingDown className="w-2.5 h-2.5" /> -0.45%
@@ -217,7 +247,7 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
             </div>
             <div className="text-right">
               <div className="text-xs font-mono font-bold text-slate-200">
-                ${solPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${formatUsd(prices.SOL ?? 0)}
               </div>
               <div className="font-mono text-[10px] text-emerald-400 flex items-center justify-end gap-0.5">
                 <TrendingUp className="w-2.5 h-2.5" /> +12.80%
@@ -231,8 +261,8 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
       <section className="grid grid-cols-2 gap-4">
         <div className="glass-card p-4 rounded-2xl bg-zinc-900/40 hover:bg-zinc-800/20 transition-all cursor-pointer">
           <div className="h-20 rounded-lg overflow-hidden relative mb-2.5 bg-zinc-950">
-            <img 
-              className="w-full h-full object-cover opacity-80" 
+            <img
+              className="w-full h-full object-cover opacity-80"
               alt="Crypto hardware render"
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuA66sB5Qh2WwrBHKDFcSIuWXbj09oYsPzzBckPZH6nsrqXx_O-NaG5gnUjs0qjSCBrhtl3T4LLDlTc4yG52-8YHGu2j6FCcir8uXXTQRgGluv3vw2qnM4tEQSFdupJ8jjVvHIYvdRvuZ-GGQrzbuK0Qu0WJFTrko9qKbWJ4NtwLy1Ni8HG_CTryTVWEXUXb7mXds-VPOaV1T62stHFWfcc6q67O0NXcW4nVakNAbqNqqVsc2z-mTt3LRuIE7b_2QxbvzK8t61NZ0wk"
             />
@@ -244,8 +274,8 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
 
         <div className="glass-card p-4 rounded-2xl bg-zinc-900/40 hover:bg-zinc-800/20 transition-all cursor-pointer">
           <div className="h-20 rounded-lg overflow-hidden relative mb-2.5 bg-zinc-950">
-            <img 
-              className="w-full h-full object-cover opacity-80" 
+            <img
+              className="w-full h-full object-cover opacity-80"
               alt="Globe abstract network"
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhKQjRI5sMLXAd2Tt5EYtV1v4UppggNKBvYftnl_FLzHHLwqFd4daxCm_hOHvRlXsHeb8x7TCOlQPEs8xY19-V1277mh1YGR-ainobbFk-oiPKIFeaknctDEelJ2lVhynshrD7Q6BYH6wY4fmMuVP_Ru31Y_W74qTvo10fSnJUJ-rte0AlKVShheJIMMP2h6IW0VFrtbtJVA1VQJUsMFjdUA19MCo2FMOcXdgvxzO99Ig0Xqaa3xXoqV1JD4ZBUxbOTubXX-Fnr5I"
             />
@@ -262,7 +292,7 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
         <p className="text-xs text-slate-400 text-center mb-4 leading-normal">
           Execute swaps with zero-lag lightning speed and custom slip protection.
         </p>
-        <button 
+        <button
           onClick={() => setShowSwapDesk(true)}
           className="w-full py-3 bg-[#00f0ff] hover:bg-cyan-400 text-slate-900 font-bold rounded-xl text-xs tracking-wide shadow-[0_0_20px_rgba(0,240,255,0.3)] hover:scale-[1.01] active:scale-95 transition-all"
         >
@@ -274,13 +304,12 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
       {showSwapDesk && (
         <div className="absolute inset-0 bg-[#0A0B10]/95 backdrop-blur-xl z-50 flex flex-col justify-center p-6 animate-fade-in">
           <div className="glass-card p-6 rounded-2xl border border-cyan-500/20 bg-zinc-950/80 max-w-sm mx-auto w-full space-y-4">
-            
             <div className="flex justify-between items-center border-b border-cyan-500/10 pb-3">
               <h4 className="font-display font-bold text-md text-[#00f0ff] uppercase tracking-wider flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
                 WalletIO Lightning Swap
               </h4>
-              <button 
+              <button
                 onClick={() => setShowSwapDesk(false) || setSwapAmount('')}
                 className="text-slate-400 hover:text-slate-200 font-mono text-xs"
               >
@@ -294,25 +323,25 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => { setSellAsset('USD'); setBuyAsset('AUR'); }}
+                    onClick={() => { setSellAsset('USD'); setBuyAsset('WIO'); }}
                     className={`py-2 px-1 text-xs font-mono rounded-lg border text-center transition-all ${
                       sellAsset === 'USD'
                         ? 'bg-cyan-500/15 border-cyan-400 text-cyan-400 font-bold'
                         : 'bg-zinc-900 border-zinc-800 text-slate-400'
                     }`}
                   >
-                    USD → AUR (Buy)
+                    USD → WIO (Buy)
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setSellAsset('AUR'); setBuyAsset('USD'); }}
+                    onClick={() => { setSellAsset('WIO'); setBuyAsset('USD'); }}
                     className={`py-2 px-1 text-xs font-mono rounded-lg border text-center transition-all ${
-                      sellAsset === 'AUR'
+                      sellAsset === 'WIO'
                         ? 'bg-cyan-500/15 border-cyan-400 text-cyan-400 font-bold'
                         : 'bg-zinc-900 border-zinc-800 text-slate-400'
                     }`}
                   >
-                    AUR → USD (Sell)
+                    WIO → USD (Sell)
                   </button>
                 </div>
               </div>
@@ -322,10 +351,10 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
                   Amount of {sellAsset} to Swap
                 </label>
                 <div className="relative">
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     step="0.01"
-                    value={swapAmount} 
+                    value={swapAmount}
                     onChange={(e) => setSwapAmount(e.target.value)}
                     placeholder="100.00"
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-3 pr-14 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan-400 font-mono"
@@ -335,9 +364,13 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
                     {sellAsset}
                   </span>
                 </div>
-                {sellAsset === 'USD' && (
+                {sellAsset === 'USD' ? (
                   <p className="font-mono text-[9px] text-slate-500 mt-1">
-                    Available USD balance: ${liquidityBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    Available USD balance: ${formatUsd(liquidityBalance)}
+                  </p>
+                ) : (
+                  <p className="font-mono text-[9px] text-slate-500 mt-1">
+                    Available WIO balance: {formatCrypto(wioBalance)} WIO
                   </p>
                 )}
               </div>
@@ -345,7 +378,7 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
               <div className="bg-zinc-900/40 p-3 rounded-xl border border-zinc-800/50 space-y-1 select-none">
                 <div className="flex justify-between text-[11px] font-mono text-slate-400">
                   <span>Rate:</span>
-                  <span className="text-slate-200">1 AUR = ${aurPrice.toFixed(4)} USD</span>
+                  <span className="text-slate-200">1 WIO = ${wioPrice.toFixed(4)} USD</span>
                 </div>
                 <div className="flex justify-between text-[11px] font-mono text-slate-400">
                   <span>Slippage Protection:</span>
@@ -353,7 +386,7 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
                 </div>
               </div>
 
-              <button 
+              <button
                 type="submit"
                 disabled={swapLoading}
                 className="w-full h-11 bg-gradient-to-r from-cyan-400 to-fuchsia-500 text-slate-900 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-1.5"
@@ -371,7 +404,6 @@ export default function MarketTerminal({ onShowNotification, liquidityBalance, o
           </div>
         </div>
       )}
-
     </div>
   );
 }

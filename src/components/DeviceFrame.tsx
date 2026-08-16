@@ -1,14 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, type ReactNode } from 'react';
 import { Wifi, Battery, ShieldAlert, X } from 'lucide-react';
+import { isDeviceFrameEnabled } from '../lib/platform';
 
 interface DeviceFrameProps {
-  children: React.ReactNode;
+  children: ReactNode;
   onCloseNotification?: () => void;
   notificationMessage?: string | null;
 }
 
+interface NotificationToastProps {
+  message: string;
+  onClose?: () => void;
+  /** Position below the OS status bar in full-screen mode. */
+  safeTop?: boolean;
+}
+
+function NotificationToast({ message, onClose, safeTop = false }: NotificationToastProps) {
+  return (
+    <div className={`absolute left-4 right-4 z-50 animate-bounce ${safeTop ? 'top-[calc(env(safe-area-inset-top)+1rem)]' : 'top-14'}`}>
+      <div className="bg-zinc-900/95 border border-cyan-500/30 backdrop-blur-xl p-3.5 rounded-2xl shadow-lg flex items-center justify-between gap-3 text-sm">
+        <div className="flex items-center gap-2.5 text-cyan-400">
+          <ShieldAlert className="w-5 h-5 shrink-0" />
+          <span className="text-xs text-slate-200 leading-snug">{message}</span>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-200 p-1 shrink-0"
+            aria-label="Dismiss notification"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DeviceFrame({ children, notificationMessage, onCloseNotification }: DeviceFrameProps) {
   const [time, setTime] = useState('09:41');
+  const framed = isDeviceFrameEnabled();
 
   useEffect(() => {
     const updateTime = () => {
@@ -24,6 +55,27 @@ export default function DeviceFrame({ children, notificationMessage, onCloseNoti
     return () => clearInterval(interval);
   }, []);
 
+  // Full-screen presentation: used inside the native wrapper (Capacitor) and
+  // for production web. Real OS chrome + safe areas replace the mock phone.
+  if (!framed) {
+    return (
+      <div
+        className="flex flex-col min-h-dvh bg-[#0A0B10] text-slate-100 selection:bg-cyan-500/30 font-sans relative overflow-hidden select-none"
+        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        {notificationMessage && (
+          <NotificationToast message={notificationMessage} onClose={onCloseNotification} safeTop />
+        )}
+
+        {/* Device Viewport / App Content */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden relative flex flex-col bg-[#0A0B10]">
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  // Framed presentation: phone mockup for the web demo / preview.
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-10 bg-[#06070a] text-slate-100 selection:bg-cyan-500/30 font-sans p-4 relative overflow-hidden">
       {/* Background ambient neon glows */}
@@ -32,7 +84,6 @@ export default function DeviceFrame({ children, notificationMessage, onCloseNoti
 
       {/* Main Container */}
       <div className="relative w-full max-w-[412px] h-[860px] bg-[#0c0d12] rounded-[52px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] border-[10px] border-zinc-800 flex flex-col overflow-hidden select-none">
-        
         {/* Simulated Speaker / Camera Island (Dynamic Island / Notch) */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-8 bg-zinc-900 rounded-b-2xl z-50 flex items-center justify-between px-5">
           <div className="w-2.5 h-2.5 bg-zinc-800 rounded-full border border-zinc-700/50" />
@@ -52,20 +103,7 @@ export default function DeviceFrame({ children, notificationMessage, onCloseNoti
 
         {/* Interactive In-App Notification Toast */}
         {notificationMessage && (
-          <div className="absolute top-14 left-4 right-4 z-50 animate-bounce">
-            <div className="bg-zinc-900/95 border border-cyan-500/30 backdrop-blur-xl p-3.5 rounded-2xl shadow-lg flex items-center justify-between gap-3 text-sm">
-              <div className="flex items-center gap-2.5 text-cyan-400">
-                <ShieldAlert className="w-5 h-5" />
-                <span className="text-xs text-slate-200 leading-snug">{notificationMessage}</span>
-              </div>
-              <button 
-                onClick={onCloseNotification} 
-                className="text-slate-400 hover:text-slate-200 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          <NotificationToast message={notificationMessage} onClose={onCloseNotification} />
         )}
 
         {/* Device Viewport / Canvas Content */}

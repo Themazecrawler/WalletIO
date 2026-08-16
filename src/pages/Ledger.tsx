@@ -32,10 +32,46 @@ export default function Ledger({ onBack, showNotification }: LedgerProps) {
 
   const triggerLedgerExport = () => {
     setIsExporting(true);
+    // Small delay for consistent UX, then actually download the CSV.
     setTimeout(() => {
       setIsExporting(false);
-      showNotification('Secure audit ledger exported to CSV file successfully!');
-    }, 1500);
+      /** Quote a CSV cell and neutralize spreadsheet formula injection: a
+       * value starting with =, +, -, or @ is treated as a formula by Excel
+       * and Sheets even when quoted, so prefix it with a single quote. */
+      const csvCell = (value: string): string => {
+        const text = String(value);
+        // Excel/Sheets treat a leading =, +, -, @, tab, CR or LF as a formula
+        // even inside quotes, so prefix any such cell with a single quote.
+        const neutralized = /^[=+\-@\t\r\n]/.test(text) ? `'${text}` : text;
+        return `"${neutralized.replace(/"/g, '""')}"`;
+      };
+      const header = ['Date', 'Time', 'Title', 'Subtitle', 'Type', 'Amount', 'Currency', 'Status'];
+      const rows = filteredTransactions.map((tx) => [
+        csvCell(tx.date),
+        csvCell(tx.time),
+        csvCell(tx.title),
+        csvCell(tx.subtitle),
+        csvCell(tx.type),
+        // Amount stays a raw number so spreadsheets keep it numeric.
+        String(tx.amount),
+        csvCell(tx.currencySymbol ?? 'USD'),
+        csvCell(tx.status),
+      ]);
+      const csv = [header.map(csvCell), ...rows]
+        .map((row) => row.join(','))
+        .join('\n');
+      // BOM so spreadsheet software infers UTF-8 for non-ASCII text.
+      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `walletio-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showNotification(`Exported ${filteredTransactions.length} records to CSV.`);
+    }, 600);
   };
 
   return (

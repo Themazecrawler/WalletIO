@@ -1,0 +1,15 @@
+#!/bin/sh
+# Strip any auto-generated attribution (e.g. "Generated with Codebuff",
+# "Co-Authored-By: Codebuff") from commit messages.
+# This repository's history belongs to the project owner alone.
+# Written to be portable across GNU and BSD sed (no `sed -i`).
+MSG_FILE="$1"
+if [ -f "$MSG_FILE" ]; then
+  TMP_FILE="${MSG_FILE}.tmp"
+  if sed '/Codebuff/d' "$MSG_FILE" > "$TMP_FILE"; then
+    mv "$TMP_FILE" "$MSG_FILE"
+  else
+    rm -f "$TMP_FILE"
+  fi
+fi
+exit 0

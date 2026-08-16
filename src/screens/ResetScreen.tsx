@@ -3,8 +3,8 @@ import { ChevronLeft, Mail } from 'lucide-react';
 
 interface ResetScreenProps {
   onBack: () => void;
-  /** Called after the email passes validation. */
-  onReset: () => void;
+  /** Called with the validated email so the app can send the reset link. */
+  onReset: (email: string) => void;
   showNotification: (msg: string) => void;
 }
 
@@ -55,7 +55,7 @@ export default function ResetScreen({ onBack, onReset, showNotification }: Reset
             if (!email.includes('@')) {
               showNotification('Please enter a valid email address.');
             } else {
-              onReset();
+              onReset(email);
             }
           }}
           className="w-full py-2.5 px-4 mt-2 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 font-display text-xs font-bold tracking-wider hover:border-[#00f0ff] hover:text-[#00f0ff] active:scale-[0.98] transition-all flex items-center justify-center gap-2 uppercase cursor-pointer"

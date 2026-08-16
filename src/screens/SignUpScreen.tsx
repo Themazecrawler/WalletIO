@@ -3,8 +3,8 @@ import { ChevronLeft, User, Mail, Lock } from 'lucide-react';
 
 interface SignUpScreenProps {
   onBack: () => void;
-  /** Called after validation passes; App opens the 2FA onboarding modal. */
-  onSignUp: (username: string, email: string) => void;
+  /** Called after validation passes; App creates the account and opens 2FA onboarding. */
+  onSignUp: (username: string, email: string, password: string) => void;
   onNavigateSignIn: () => void;
 }
 
@@ -173,7 +173,7 @@ export default function SignUpScreen({ onBack, onSignUp, onNavigateSignIn }: Sig
               setErrors(nextErrors);
             } else {
               setErrors({});
-              onSignUp(username.trim(), email.trim());
+              onSignUp(username.trim(), email.trim(), password);
             }
           }}
           className="w-full py-2.5 px-4 mt-3 rounded-xl bg-[#00f0ff] text-slate-950 font-display text-xs font-bold tracking-wider hover:bg-cyan-300 active:scale-[0.98] transition-all flex items-center justify-center gap-2 uppercase shadow-[0_0_15px_rgba(0,240,255,0.2)] cursor-pointer"

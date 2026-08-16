@@ -45,6 +45,27 @@ describe('walletReducer', () => {
     });
     expect(next.securityState).toEqual({ biometricUnlock: false, twoFactorProtocol: true });
   });
+
+  it('hydrates server balances by symbol, overriding local demo values', () => {
+    const next = walletReducer(initialWalletState, {
+      type: 'HYDRATE_BALANCES',
+      balances: { USD: 1000, BTC: 0.5, WIO: 12345 },
+    });
+    expect(next.liquidityBalance).toBe(1000);
+    expect(next.assets.find((a) => a.id === 'asset-btc')?.balance).toBe(0.5);
+    expect(next.assets.find((a) => a.id === 'asset-wio')?.balance).toBe(12345);
+    // Symbols not present in the server payload keep their local balance.
+    expect(next.assets.find((a) => a.id === 'asset-eth')?.balance).toBe(18.52);
+  });
+
+  it('hydrate ignores malformed balances', () => {
+    const next = walletReducer(initialWalletState, {
+      type: 'HYDRATE_BALANCES',
+      balances: { USD: Number.NaN, BTC: 2.5 },
+    });
+    expect(next.liquidityBalance).toBe(initialWalletState.liquidityBalance);
+    expect(next.assets.find((a) => a.id === 'asset-btc')?.balance).toBe(2.5);
+  });
 });
 
 describe('wallet persistence', () => {

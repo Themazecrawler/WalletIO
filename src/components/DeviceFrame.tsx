@@ -61,7 +61,7 @@ export default function DeviceFrame({ children, notificationMessage, onCloseNoti
     return (
       <div
         className="flex flex-col min-h-dvh bg-[#0A0B10] text-slate-100 selection:bg-cyan-500/30 font-sans relative overflow-hidden select-none"
-        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {notificationMessage && (
           <NotificationToast message={notificationMessage} onClose={onCloseNotification} safeTop />

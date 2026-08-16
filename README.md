@@ -89,9 +89,26 @@ The app ships with optional Supabase and Sentry integrations that activate autom
    VITE_SUPABASE_ANON_KEY="<your-anon-key>"
    VITE_SENTRY_DSN="https://<key>@o<org>.ingest.sentry.io/<project>"
    ```
-3. Restart the dev server. Email/password sign-in, sign-up, password reset, and sign-out now call Supabase Auth (server-side password verification, real accounts); the error boundary reports crashes to Sentry.
+3. Apply the database migration so balances live server-side (see below).
+4. Restart the dev server. Email/password sign-in, sign-up, password reset, and sign-out now call Supabase Auth (server-side password verification, real accounts); the error boundary reports crashes to Sentry.
 
-Still simulated for now: TOTP 2FA (the in-app 2FA gate is a local stand-in), server-authoritative balances/ledger behind Supabase Row-Level Security, and real Web3 wallet connections.
+Still simulated for now: TOTP 2FA (the in-app 2FA gate is a local stand-in) and real Web3 wallet connections.
+
+### Server-authoritative balances (RLS)
+
+When a Supabase session is live, balances stop being `localStorage` play money and are enforced by the server:
+
+1. Run the migration in a Supabase CLI project (`supabase db push`) or paste `supabase/migrations/20260816000000_wallet_balances.sql` into the SQL editor.
+2. On every sign-in the app hydrates balances from the `wallet_balances` table (RLS: users can only read their own rows).
+3. Every transfer, vault deposit/withdraw, and market swap is applied through the `walletio_apply_movement` RPC — a security-definer function that applies the delta atomically and rejects any movement that would take a balance below zero. The UI then updates from the **server-confirmed** balance.
+4. Transactions are appended to `ledger_entries` (RLS insert with check), so the history is preserved server-side too.
+
+New accounts are seeded with the starter portfolio by a trigger on `auth.users`. Editing `localStorage` can no longer mint money: the server is the source of truth and re-asserts itself on every load. Without credentials (or before a session exists) the app falls back to the simulated local store unchanged.
+
+> **CSP on production hosting**: the production build embeds a strict Content-Security-Policy via a `<meta>` tag. The build auto-widens `connect-src` with the Supabase project origin and Sentry ingest origin from the env vars set at build time, so auth calls and error telemetry are not blocked in production. `frame-ancestors` (clickjacking protection) is only honored when the policy is sent as an HTTP response header — add the full policy to your host's header config, e.g.:
+> ```
+> Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com; connect-src 'self' https://<project-ref>.supabase.co https://o<org>.ingest.sentry.io; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+> ```
 
 > **CSP on production hosting**: the production build embeds a strict Content-Security-Policy via a `<meta>` tag, but `frame-ancestors` (clickjacking protection) is only honored when the policy is sent as an HTTP response header. Add the full policy to your host's header config, e.g.:
 > ```

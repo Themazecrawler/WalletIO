@@ -10,7 +10,9 @@ export default tseslint.config(
   {
     // Browser code: the whole app + tests run in the browser/jsdom. Only
     // browser globals are available, so Node-only identifiers (process,
-    // Buffer, __dirname) in src are flagged by no-undef.
+    // Buffer, __dirname) in src are flagged by no-undef. no-undef is
+    // explicitly re-enabled here because typescript-eslint's recommended
+    // config (via eslint-recommended) turns it off for TS files.
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2022,
@@ -26,6 +28,7 @@ export default tseslint.config(
       ],
       '@typescript-eslint/no-explicit-any': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
+      'no-undef': 'error',
     },
   },
   {
@@ -33,6 +36,9 @@ export default tseslint.config(
     files: ['*.config.{js,ts}', 'eslint.config.js'],
     languageOptions: {
       globals: { ...globals.node },
+    },
+    rules: {
+      'no-undef': 'error',
     },
   },
 );

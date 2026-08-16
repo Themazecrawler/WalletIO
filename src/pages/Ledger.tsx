@@ -40,7 +40,9 @@ export default function Ledger({ onBack, showNotification }: LedgerProps) {
        * and Sheets even when quoted, so prefix it with a single quote. */
       const csvCell = (value: string): string => {
         const text = String(value);
-        const neutralized = /^[=+\-@]/.test(text) ? `'${text}` : text;
+        // Excel/Sheets treat a leading =, +, -, @, tab, CR or LF as a formula
+        // even inside quotes, so prefix any such cell with a single quote.
+        const neutralized = /^[=+\-@\t\r\n]/.test(text) ? `'${text}` : text;
         return `"${neutralized.replace(/"/g, '""')}"`;
       };
       const header = ['Date', 'Time', 'Title', 'Subtitle', 'Type', 'Amount', 'Currency', 'Status'];

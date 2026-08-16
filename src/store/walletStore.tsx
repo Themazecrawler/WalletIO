@@ -4,11 +4,20 @@ import React, {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
+  useCallback,
   type Dispatch,
   type ReactNode,
 } from 'react';
 import { CryptoAsset, SecurityHubState, Transaction } from '../types';
 import { INITIAL_ASSETS, INITIAL_TRANSACTIONS } from '../data';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import {
+  applyServerMovement,
+  fetchServerBalances,
+  recordServerLedger,
+  type ServerBalances,
+} from '../lib/balances';
 
 export interface WalletState {
   transactions: Transaction[];
@@ -23,7 +32,8 @@ export type WalletAction =
   | { type: 'UPDATE_ASSET_BALANCE'; assetId: string; newBalance: number }
   | { type: 'SET_LIQUIDITY'; balance: number }
   | { type: 'TOGGLE_SECURITY'; key: keyof SecurityHubState }
-  | { type: 'SET_SECURITY'; state: SecurityHubState };
+  | { type: 'SET_SECURITY'; state: SecurityHubState }
+  | { type: 'HYDRATE_BALANCES'; balances: ServerBalances };
 
 export const initialWalletState: WalletState = {
   transactions: INITIAL_TRANSACTIONS,
@@ -52,6 +62,19 @@ export function walletReducer(state: WalletState, action: WalletAction): WalletS
       };
     case 'SET_SECURITY':
       return { ...state, securityState: action.state };
+    case 'HYDRATE_BALANCES':
+      // Server values win over local demo data; 'USD' is the cash liquidity.
+      return {
+        ...state,
+        liquidityBalance: Number.isFinite(action.balances.USD)
+          ? action.balances.USD
+          : state.liquidityBalance,
+        assets: state.assets.map((asset) =>
+          Number.isFinite(action.balances[asset.symbol])
+            ? { ...asset, balance: action.balances[asset.symbol] }
+            : asset,
+        ),
+      };
   }
 }
 
@@ -96,9 +119,11 @@ interface WalletProviderProps {
   initialState?: WalletState;
   /** Set false to skip reading/writing localStorage (used by tests). */
   persist?: boolean;
+  /** Surfaced when the server rejects a balance movement (e.g. insufficient funds). */
+  onServerError?: (message: string) => void;
 }
 
-export function WalletProvider({ children, initialState, persist = true }: WalletProviderProps) {
+export function WalletProvider({ children, initialState, persist = true, onServerError }: WalletProviderProps) {
   const [state, dispatch] = useReducer(walletReducer, undefined, () => {
     if (initialState) return initialState;
     return hydrateWalletState() ?? initialWalletState;
@@ -113,7 +138,101 @@ export function WalletProvider({ children, initialState, persist = true }: Walle
     }
   }, [state, persist]);
 
-  const value = useMemo<WalletContextValue>(() => ({ ...state, dispatch }), [state]);
+  // Latest confirmed state (used to compute deltas for server movements).
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const onServerErrorRef = useRef(onServerError);
+  useEffect(() => {
+    onServerErrorRef.current = onServerError;
+  }, [onServerError]);
+
+  // True only when a real Supabase session exists — set on sign-in, cleared
+  // on sign-out. Demo mode (no backend, or no server session) stays a plain
+  // synchronous local store, exactly as before.
+  const supabaseSessionRef = useRef(false);
+
+  const dispatchRef = useRef(dispatch);
+
+  /**
+   * Money mutations are applied through the server RPC first when a Supabase
+   * session is live, and local state is updated from the server-confirmed
+   * balance — so balances are server-authoritative and can't go negative.
+   * Transactions are recorded best-effort to the server ledger.
+   */
+  const serverAwareDispatch = useCallback((action: WalletAction) => {
+    const baseDispatch = dispatchRef.current;
+    if (!supabaseSessionRef.current) {
+      baseDispatch(action);
+      return;
+    }
+
+    if (action.type === 'SET_LIQUIDITY') {
+      const delta = action.balance - stateRef.current.liquidityBalance;
+      if (delta === 0) return;
+      void applyServerMovement('USD', delta).then((newBalance) => {
+        if (newBalance === null) {
+          onServerErrorRef.current?.('Balance change rejected by the server. Your funds were not moved.');
+          return;
+        }
+        baseDispatch({ type: 'SET_LIQUIDITY', balance: newBalance });
+      });
+      return;
+    }
+
+    if (action.type === 'UPDATE_ASSET_BALANCE') {
+      const asset = stateRef.current.assets.find((a) => a.id === action.assetId);
+      if (!asset) return;
+      const delta = action.newBalance - asset.balance;
+      if (delta === 0) return;
+      void applyServerMovement(asset.symbol, delta).then((newBalance) => {
+        if (newBalance === null) {
+          onServerErrorRef.current?.(`${asset.symbol} balance change rejected by the server.`);
+          return;
+        }
+        baseDispatch({ type: 'UPDATE_ASSET_BALANCE', assetId: action.assetId, newBalance });
+      });
+      return;
+    }
+
+    if (action.type === 'ADD_TRANSACTION') {
+      baseDispatch(action);
+      void recordServerLedger(action.transaction);
+      return;
+    }
+
+    baseDispatch(action);
+  }, []);
+
+  // Track the Supabase session and hydrate balances from the server whenever
+  // a real session exists (initial load with a persisted session, or sign-in).
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    const hydrate = async () => {
+      const balances = await fetchServerBalances();
+      if (balances && Object.keys(balances).length > 0) {
+        dispatchRef.current({ type: 'HYDRATE_BALANCES', balances });
+      }
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      supabaseSessionRef.current = Boolean(session);
+      if (session) void hydrate();
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        supabaseSessionRef.current = true;
+        void hydrate();
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const value = useMemo<WalletContextValue>(
+    () => ({ ...state, dispatch: serverAwareDispatch }),
+    [state, serverAwareDispatch],
+  );
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 

@@ -150,6 +150,16 @@ function WalletApp() {
     };
   }, [authStage, sessionExpiresAt, showNotification]);
 
+  // Server-authoritative balance rejections (Supabase RPC) surface here as
+  // toasts instead of silently diverging from the server.
+  useEffect(() => {
+    const onServerError = (event: Event) => {
+      showNotification((event as CustomEvent<string>).detail);
+    };
+    window.addEventListener('walletio:server-error', onServerError);
+    return () => window.removeEventListener('walletio:server-error', onServerError);
+  }, [showNotification]);
+
   // Marks the moment authentication begins and fixes the session deadline.
   const beginAuthenticatedSession = useCallback(() => {
     setAuthStage('authenticated');
@@ -172,14 +182,18 @@ function WalletApp() {
     [beginAuthenticatedSession, navigate, showNotification],
   );
 
-  // 2FA orchestration
+  // 2FA orchestration. A pending action can carry an onCancel hook so that
+  // canceling a sign-in verification also revokes the Supabase session that
+  // was already established (see handleSignIn).
   const [twoFAVerificationTitle, setTwoFAVerificationTitle] = useState('');
   const [twoFARequireCode, setTwoFARequireCode] = useState(false);
   const [pending2FAAction, setPending2FAAction] = useState<(() => void) | null>(null);
+  const [pending2FACancel, setPending2FACancel] = useState<(() => void) | null>(null);
 
   const request2FA = useCallback(
-    (action: () => void, title: string, opts?: { requireCode?: boolean }) => {
+    (action: () => void, title: string, opts?: { requireCode?: boolean; onCancel?: () => void }) => {
       setPending2FAAction(() => action);
+      setPending2FACancel(() => opts?.onCancel ?? null);
       setTwoFAVerificationTitle(title);
       setTwoFARequireCode(opts?.requireCode ?? false);
       modals.open('twoFAVerification');
@@ -190,15 +204,19 @@ function WalletApp() {
   const handle2FAAuthorized = useCallback(() => {
     const action = pending2FAAction;
     setPending2FAAction(null);
+    setPending2FACancel(null);
     modals.close('twoFAVerification');
     action?.();
   }, [pending2FAAction, modals]);
 
   const handle2FACancel = useCallback(() => {
+    const cancel = pending2FACancel;
     setPending2FAAction(null);
+    setPending2FACancel(null);
     modals.close('twoFAVerification');
+    cancel?.();
     showNotification('Security verification canceled.');
-  }, [modals, showNotification]);
+  }, [pending2FACancel, modals, showNotification]);
 
   // Auth flows
   const handleSignIn = useCallback(
@@ -219,8 +237,14 @@ function WalletApp() {
       }
 
       // Second factor (simulated TOTP/biometric gate until real MFA lands).
+      // If the user cancels, the Supabase session started above is revoked so
+      // an authenticated server session can't outlive a failed app sign-in.
       if (securityState.twoFactorProtocol) {
-        request2FA(proceedWithLogin, 'Verify Sign In Attempt');
+        request2FA(proceedWithLogin, 'Verify Sign In Attempt', {
+          onCancel: () => {
+            if (supabase) void supabase.auth.signOut();
+          },
+        });
       } else {
         proceedWithLogin();
       }
@@ -242,13 +266,22 @@ function WalletApp() {
   const handleSignUpValid = useCallback(
     async (username: string, email: string, password: string) => {
       if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { data: { full_name: username } },
         });
         if (error) {
           showNotification(`Sign-up failed: ${error.message}`);
+          return;
+        }
+        // When email confirmation is enabled Supabase returns no session, so
+        // the account isn't usable yet — don't grant vault access. Send the
+        // user to sign-in and wait until the email is confirmed.
+        if (!data.session) {
+          setPrefillEmail(email);
+          setAuthStage('signin');
+          showNotification('Check your inbox to confirm your email, then sign in.');
           return;
         }
       }
@@ -452,9 +485,13 @@ function WalletApp() {
           {authStage === 'reset' && (
             <ResetScreen
               onBack={() => setAuthStage('signin')}
-              onReset={(email) => {
+              onReset={async (email) => {
                 if (isSupabaseConfigured && supabase) {
-                  void supabase.auth.resetPasswordForEmail(email);
+                  const { error } = await supabase.auth.resetPasswordForEmail(email);
+                  if (error) {
+                    showNotification(`Password reset failed: ${error.message}`);
+                    return;
+                  }
                 }
                 setAuthStage('signin');
                 showNotification('A password reset link has been sent to your email.');
@@ -569,7 +606,11 @@ function WalletApp() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <WalletProvider>
+      <WalletProvider
+        onServerError={(message) =>
+          window.dispatchEvent(new CustomEvent('walletio:server-error', { detail: message }))
+        }
+      >
         <PriceFeedProvider>
           <ModalManagerProvider>
             <WalletApp />

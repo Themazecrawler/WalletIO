@@ -1,4 +1,4 @@
-import { Wallet, ArrowLeftRight, Bitcoin, Activity, History } from 'lucide-react';
+import { Wallet, ArrowLeftRight, Bitcoin, Activity } from 'lucide-react';
 import { Page } from '../types';
 
 interface BottomNavProps {

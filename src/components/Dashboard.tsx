@@ -1,22 +1,16 @@
 import React, { useState } from 'react';
-import { Wallet, Bolt, Flame, Eye, EyeOff, PlusCircle, ArrowUpRight, CheckCircle2, Clock } from 'lucide-react';
+import { Wallet, Bolt, Flame, Eye, EyeOff } from 'lucide-react';
 import { Transaction } from '../types';
 import { formatUsd } from '../lib/format';
 
 interface DashboardProps {
-  transactions: Transaction[];
   portfolioValue: number;
   onAddTransaction: (tx: Transaction) => void;
-  onNavigateToHistory: () => void;
-  isBiometricAuthenticated: boolean;
 }
 
 export default function Dashboard({ 
-  transactions, 
   portfolioValue, 
-  onAddTransaction, 
-  onNavigateToHistory, 
-  isBiometricAuthenticated 
+  onAddTransaction 
 }: DashboardProps) {
   const [hideBalance, setHideBalance] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);

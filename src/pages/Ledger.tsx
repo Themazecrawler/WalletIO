@@ -32,10 +32,34 @@ export default function Ledger({ onBack, showNotification }: LedgerProps) {
 
   const triggerLedgerExport = () => {
     setIsExporting(true);
+    // Small delay for consistent UX, then actually download the CSV.
     setTimeout(() => {
       setIsExporting(false);
-      showNotification('Secure audit ledger exported to CSV file successfully!');
-    }, 1500);
+      const header = ['Date', 'Time', 'Title', 'Subtitle', 'Type', 'Amount', 'Currency', 'Status'];
+      const rows = filteredTransactions.map((tx) => [
+        tx.date,
+        tx.time,
+        tx.title,
+        tx.subtitle,
+        tx.type,
+        String(tx.amount),
+        tx.currencySymbol ?? 'USD',
+        tx.status,
+      ]);
+      const csv = [header, ...rows]
+        .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `walletio-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showNotification(`Exported ${filteredTransactions.length} records to CSV.`);
+    }, 600);
   };
 
   return (

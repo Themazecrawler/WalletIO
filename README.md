@@ -5,7 +5,7 @@ WalletIO is a highly secure, modern digital crypto wallet application built with
 ## Features
 
 - **Crypto Vault & Dashboard**: Monitor your portfolio value, view individual crypto balances in real-time, and track your recent transactions.
-- **Secure Authentication**: Multi-layered authentication including Email/Password, Social Logins (Google/Apple), and simulated Biometric (Face ID / Touch ID) unlocks.
+- **Secure Authentication**: Multi-layered (simulated) authentication flow including Email/Password, Social Logins (Google/Apple), and Biometric (Face ID / Touch ID) unlocks, plus a two-factor verification gate for sign-in and sensitive actions.
 - **Transfers & Ledger**: Send and receive crypto assets with seamless QR code scanning and a fully searchable, filterable transaction ledger.
 - **Market Terminal**: Trade assets dynamically with live-simulated liquidity cash balances.
 - **Security Hub**: Toggle Two-Factor Authentication (2FA) and Biometric unlocking, requiring authorizations for sensitive actions.
@@ -50,7 +50,16 @@ Make sure you have Node.js and a package manager like `npm`, `yarn`, `pnpm`, or 
 - `npm run dev`: Starts the local Vite development server.
 - `npm run build`: Bundles the application for production.
 - `npm run preview`: Previews the production build locally.
-- `npm run lint`: Runs TypeScript type checking.
+- `npm run typecheck`: Type-checks the project with `tsc --noEmit`.
+- `npm run lint`: Runs ESLint (TypeScript + React Hooks rules).
+- `npm run test`: Runs the vitest + Testing Library suite.
 - `npm run clean`: Cleans up the `dist` folder.
+
+> **Note on identity & auth**: This is a front-end demo — all authentication, biometrics, 2FA, balances, and Web3 wallet connections are simulated in the browser (versioned `localStorage`). Nothing is sent to a server, and no credentials are stored or verified. Treat it as a UI showcase, not a production wallet.
+
+> **Git hooks**: The repo ships a commit-msg guard in `scripts/git-hooks` that strips auto-generated attribution lines. Enable it in any fresh clone with:
+> ```bash
+> git config core.hooksPath scripts/git-hooks
+> ```
 
 Live app : https://walletio.webflow.io/

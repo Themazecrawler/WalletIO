@@ -48,7 +48,7 @@ export default function Transfers({ onShowNotification, onScanQRCode, onRequest2
 
   const handleSecureBeam = () => {
     const amountVal = parseFloat(enteringAmount);
-    if (isNaN(amountVal) || amountVal <= 0) {
+    if (!Number.isFinite(amountVal) || amountVal <= 0) {
       onShowNotification('Enter a positive transfer amount first.');
       return;
     }
@@ -128,7 +128,7 @@ export default function Transfers({ onShowNotification, onScanQRCode, onRequest2
             return (
               <button
                 key={contact.id}
-                onClick={() => setBeamState('idle') || setSelectedContact(contact)}
+                onClick={() => { setBeamState('idle'); setSelectedContact(contact); }}
                 className={`flex flex-col items-center gap-2 group focus:outline-none transition-all duration-300 min-w-[70px] ${
                   isSelected ? 'scale-105' : 'opacity-60 hover:opacity-90'
                 }`}

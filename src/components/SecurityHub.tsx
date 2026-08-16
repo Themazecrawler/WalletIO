@@ -179,7 +179,3 @@ export default function SecurityHub({ securityState, onToggleSecurity, onClose, 
     </div>
   );
 }
-export interface FaceIconProps {}
-export interface HubProps {}
-export interface KeyProps {}
-export interface WorkspacePremiumProps {}

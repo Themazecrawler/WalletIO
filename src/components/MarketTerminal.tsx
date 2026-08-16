@@ -17,7 +17,6 @@ export default function MarketTerminal({ onShowNotification }: MarketTerminalPro
   const [activeInterval, setActiveInterval] = useState<'1H' | '4H' | '1D'>('4H');
   const [showSwapDesk, setShowSwapDesk] = useState(false);
   const [sellAsset, setSellAsset] = useState('USD');
-  const [buyAsset, setBuyAsset] = useState('WIO');
   const [swapAmount, setSwapAmount] = useState('');
   const [swapLoading, setSwapLoading] = useState(false);
 
@@ -27,7 +26,7 @@ export default function MarketTerminal({ onShowNotification }: MarketTerminalPro
   const handleSwapExecute = (e: React.FormEvent) => {
     e.preventDefault();
     const amountVal = parseFloat(swapAmount);
-    if (isNaN(amountVal) || amountVal <= 0) {
+    if (!Number.isFinite(amountVal) || amountVal <= 0) {
       onShowNotification('Please enter a valid positive trade amount.');
       return;
     }
@@ -310,7 +309,7 @@ export default function MarketTerminal({ onShowNotification }: MarketTerminalPro
                 WalletIO Lightning Swap
               </h4>
               <button
-                onClick={() => setShowSwapDesk(false) || setSwapAmount('')}
+                onClick={() => { setShowSwapDesk(false); setSwapAmount(''); }}
                 className="text-slate-400 hover:text-slate-200 font-mono text-xs"
               >
                 CLOSE
@@ -323,7 +322,7 @@ export default function MarketTerminal({ onShowNotification }: MarketTerminalPro
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => { setSellAsset('USD'); setBuyAsset('WIO'); }}
+                    onClick={() => setSellAsset('USD')}
                     className={`py-2 px-1 text-xs font-mono rounded-lg border text-center transition-all ${
                       sellAsset === 'USD'
                         ? 'bg-cyan-500/15 border-cyan-400 text-cyan-400 font-bold'
@@ -334,7 +333,7 @@ export default function MarketTerminal({ onShowNotification }: MarketTerminalPro
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setSellAsset('WIO'); setBuyAsset('USD'); }}
+                    onClick={() => setSellAsset('WIO')}
                     className={`py-2 px-1 text-xs font-mono rounded-lg border text-center transition-all ${
                       sellAsset === 'WIO'
                         ? 'bg-cyan-500/15 border-cyan-400 text-cyan-400 font-bold'

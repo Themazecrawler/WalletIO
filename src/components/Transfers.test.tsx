@@ -66,7 +66,7 @@ describe('Transfers beam', () => {
   });
 
   it('gates the beam behind 2FA and settles only after authorization', () => {
-    const { notify, request2FA } = renderTransfers(true);
+    const { request2FA } = renderTransfers(true);
 
     enterAmount('50');
     fireEvent.click(screen.getByRole('button', { name: /secure beam/i }));

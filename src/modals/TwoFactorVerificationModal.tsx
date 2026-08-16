@@ -17,9 +17,13 @@ export default function TwoFactorVerificationModal({
   onClose,
   showNotification
 }: TwoFactorVerificationModalProps) {
-  const { securityState, dispatch } = useWallet();
+  const { securityState } = useWallet();
   const [isScanning, setIsScanning] = useState(false);
   const [authCode, setAuthCode] = useState('');
+  // Choosing the code input for this verification is a local UI choice — it
+  // must NOT mutate the user's security settings.
+  const [useCodeInput, setUseCodeInput] = useState(false);
+  const showBiometric = securityState.biometricUnlock && !useCodeInput;
 
   return (
     <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 select-none animate-fade-in">
@@ -39,7 +43,7 @@ export default function TwoFactorVerificationModal({
 
         {/* Dynamic UI depending on biometric status */}
         <div className="py-2 flex flex-col items-center justify-center">
-          {securityState.biometricUnlock ? (
+          {showBiometric ? (
             /* Biometric Scanning Prompter */
             <div className="flex flex-col items-center gap-4 text-center w-full">
               <button
@@ -74,7 +78,7 @@ export default function TwoFactorVerificationModal({
 
               {/* Option to use Google Authenticator instead */}
               <button
-                onClick={() => dispatch({ type: 'TOGGLE_SECURITY', key: 'biometricUnlock' })}
+                onClick={() => setUseCodeInput(true)}
                 className="font-mono text-[8px] text-cyan-500 hover:text-cyan-400 uppercase tracking-widest mt-1 focus:outline-none cursor-pointer"
               >
                 Use Authenticator Code Instead

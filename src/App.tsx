@@ -14,6 +14,7 @@ import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import ResetScreen from './screens/ResetScreen';
 import Ledger from './pages/Ledger';
+import ErrorBoundary from './components/ErrorBoundary';
 import { WalletProvider, useWallet } from './store/walletStore';
 import { PriceFeedProvider, usePriceFeed } from './store/priceFeed';
 import { ModalManagerProvider, ModalHost, useModalManager } from './modals/ModalManager';
@@ -27,6 +28,8 @@ import { SecurityHubState } from './types';
 // --- Session persistence (auth stage + web3 connection) -------------------
 
 const SESSION_STORAGE_KEY = 'walletio:session:v1';
+/** Sessions expire after 7 days of inactivity; the user must re-authenticate. */
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type AuthStage = 'welcome' | 'signin' | 'signup' | 'reset' | 'authenticated';
 const AUTH_STAGES: AuthStage[] = ['welcome', 'signin', 'signup', 'reset', 'authenticated'];
@@ -37,6 +40,7 @@ interface SessionState {
   walletAddress: string | null;
   walletNetwork: string;
   walletName: string | null;
+  expiresAt: number;
 }
 
 function hydrateSession(): Partial<SessionState> {
@@ -44,6 +48,11 @@ function hydrateSession(): Partial<SessionState> {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Partial<SessionState>;
+    // Expired sessions are discarded so the user is forced back through auth.
+    if (typeof parsed.expiresAt === 'number' && Date.now() > parsed.expiresAt) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return {};
+    }
     const out: Partial<SessionState> = {};
     if (parsed.authStage && AUTH_STAGES.includes(parsed.authStage)) out.authStage = parsed.authStage;
     if (typeof parsed.isWalletConnected === 'boolean') out.isWalletConnected = parsed.isWalletConnected;
@@ -62,7 +71,7 @@ function hydrateSession(): Partial<SessionState> {
 
 function WalletApp() {
   const { route, navigate, back } = useHashRoute();
-  const { dispatch, transactions, assets, liquidityBalance, securityState } = useWallet();
+  const { dispatch, assets, securityState } = useWallet();
   const prices = usePriceFeed();
   const modals = useModalManager();
 
@@ -78,7 +87,14 @@ function WalletApp() {
     try {
       localStorage.setItem(
         SESSION_STORAGE_KEY,
-        JSON.stringify({ authStage, isWalletConnected, walletAddress, walletNetwork, walletName }),
+        JSON.stringify({
+          authStage,
+          isWalletConnected,
+          walletAddress,
+          walletNetwork,
+          walletName,
+          expiresAt: Date.now() + SESSION_TTL_MS,
+        }),
       );
     } catch {
       // Storage unavailable — session just won't persist.
@@ -192,19 +208,38 @@ function WalletApp() {
     [dispatch, modals, navigate, showNotification],
   );
 
-  // Security preferences toggling
+  // Security preferences toggling.
+  // Disabling a protection is a sensitive change: it requires a fresh 2FA
+  // verification, so a thief who finds the phone unlocked can't disarm the
+  // account. Enabling is harmless and goes straight through.
   const handleToggleSecurity = useCallback(
     (key: keyof SecurityHubState) => {
-      dispatch({ type: 'TOGGLE_SECURITY', key });
-      const next = !securityState[key];
-      showNotification(`${key.replace(/([A-Z])/g, ' $1')} has been ${next ? 'ENABLED' : 'DISABLED'}.`);
+      const label = key === 'biometricUnlock' ? 'Biometric Unlock' : '2FA Protocol';
+      const turningOff = securityState[key];
+      if (turningOff) {
+        request2FA(
+          () => {
+            dispatch({ type: 'TOGGLE_SECURITY', key });
+            showNotification(`${label} has been DISABLED.`);
+          },
+          `Disable ${label}`,
+        );
+        showNotification(`Confirm your identity to disable ${label}.`);
+      } else {
+        dispatch({ type: 'TOGGLE_SECURITY', key });
+        showNotification(`${label} has been ENABLED.`);
+      }
     },
-    [dispatch, securityState, showNotification],
+    [dispatch, securityState, request2FA, showNotification],
   );
 
-  // Lock session helper
+  // Lock session helper: de-auth also severs the Web3 connection so a
+  // "logout" actually logs out everything.
   const handleDeauthenticate = useCallback(() => {
     setAuthStage('signin');
+    setIsWalletConnected(false);
+    setWalletAddress(null);
+    setWalletName(null);
     showNotification('Session successfully de-authenticated. Secure Chip locked.');
   }, [showNotification]);
 
@@ -374,14 +409,11 @@ function WalletApp() {
           <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
             {route === 'vault' && (
               <Dashboard
-                transactions={transactions}
                 portfolioValue={portfolioValue}
                 onAddTransaction={(tx) => {
                   dispatch({ type: 'ADD_TRANSACTION', transaction: tx });
                   showNotification(`Added transaction: ${tx.title}`);
                 }}
-                onNavigateToHistory={() => navigate('ledger')}
-                isBiometricAuthenticated={isAuthenticated}
               />
             )}
 
@@ -463,12 +495,14 @@ function WalletApp() {
 
 export default function App() {
   return (
-    <WalletProvider>
-      <PriceFeedProvider>
-        <ModalManagerProvider>
-          <WalletApp />
-        </ModalManagerProvider>
-      </PriceFeedProvider>
-    </WalletProvider>
+    <ErrorBoundary>
+      <WalletProvider>
+        <PriceFeedProvider>
+          <ModalManagerProvider>
+            <WalletApp />
+          </ModalManagerProvider>
+        </PriceFeedProvider>
+      </WalletProvider>
+    </ErrorBoundary>
   );
 }

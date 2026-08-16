@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldAlert, ArrowUpRight, ArrowDownLeft, Shield, Lock, Coins, TrendingUp, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Shield, Lock, Coins, TrendingUp } from 'lucide-react';
 import { useWallet } from '../store/walletStore';
 import { usePriceFeed } from '../store/priceFeed';
 import { formatUsd, formatCrypto, formatTransactionAmount } from '../lib/format';
@@ -25,7 +25,7 @@ export default function CryptoVault({ onShowNotification, onNavigateToHistory }:
   const handleActionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(actionAmount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       onShowNotification('Enter a valid positive number.');
       return;
     }
@@ -225,7 +225,7 @@ export default function CryptoVault({ onShowNotification, onNavigateToHistory }:
                 Quantum Vault {activeAction}
               </h4>
               <button
-                onClick={() => setActiveAction('none') || setActionAmount('')}
+                onClick={() => { setActiveAction('none'); setActionAmount(''); }}
                 className="text-slate-400 hover:text-slate-200 font-mono text-xs"
               >
                 CLOSE

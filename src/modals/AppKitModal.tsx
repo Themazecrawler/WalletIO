@@ -29,6 +29,15 @@ const WALLETS: ConnectWalletInfo[] = [
   { name: 'Trust Wallet', symbol: 'TW', color: 'from-[#3375BB] to-[#14498C]', address: '0x04CCffF497E1fC1b1bF9Ea543e88888804Cc21Fa', net: 'Optimism' }
 ];
 
+const EXPLORER_BY_NETWORK: Record<string, string> = {
+  Ethereum: 'https://etherscan.io/address/',
+  'Arbitrum One': 'https://arbiscan.io/address/',
+  'Base Network': 'https://basescan.org/address/',
+  Optimism: 'https://optimistic.etherscan.io/address/',
+  Polygon: 'https://polygonscan.com/address/',
+  Solana: 'https://solscan.io/address/',
+};
+
 const NETWORKS = [
   { name: 'Ethereum', color: 'border-cyan-500/10' },
   { name: 'Arbitrum One', color: 'border-blue-500/10' },
@@ -186,11 +195,11 @@ export default function AppKitModal({
                     <Copy className="w-3.5 h-3.5" />
                   </button>
                   <a
-                    href={`https://etherscan.io/address/${walletAddress}`}
+                    href={`${EXPLORER_BY_NETWORK[walletNetwork] ?? EXPLORER_BY_NETWORK.Ethereum}${walletAddress}`}
                     target="_blank"
                     rel="noreferrer noopener"
                     className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-slate-400 hover:text-slate-100 transition-all flex items-center justify-center"
-                    title="View on Etherscan"
+                    title="View address on block explorer"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>

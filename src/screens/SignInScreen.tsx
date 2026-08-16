@@ -4,8 +4,8 @@ import { ChevronLeft, Mail, Lock, Fingerprint, ScanFace } from 'lucide-react';
 interface SignInScreenProps {
   onBack: () => void;
   onForgot: () => void;
-  /** Called with the validated email; App gates on 2FA. */
-  onSignIn: (email: string) => void;
+  /** Called with the validated credentials; App verifies and gates on 2FA. */
+  onSignIn: (email: string, password: string) => void;
   /** Called after the simulated biometric scan completes. */
   onBiometricLogin: (type: 'fingerprint' | 'face') => void;
   onNavigateSignUp: () => void;
@@ -103,7 +103,7 @@ export default function SignInScreen({
             if (!email.includes('@') || password.length < 4) {
               showNotification('Please enter a valid email address and password.');
             } else {
-              onSignIn(email);
+              onSignIn(email, password);
             }
           }}
           className="w-full py-2.5 px-4 mt-1 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 font-display text-xs font-bold tracking-wider hover:border-[#00f0ff] hover:text-[#00f0ff] active:scale-[0.98] transition-all flex items-center justify-center gap-2 uppercase cursor-pointer"

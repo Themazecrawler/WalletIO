@@ -35,21 +35,31 @@ export default function Ledger({ onBack, showNotification }: LedgerProps) {
     // Small delay for consistent UX, then actually download the CSV.
     setTimeout(() => {
       setIsExporting(false);
+      /** Quote a CSV cell and neutralize spreadsheet formula injection: a
+       * value starting with =, +, -, or @ is treated as a formula by Excel
+       * and Sheets even when quoted, so prefix it with a single quote. */
+      const csvCell = (value: string): string => {
+        const text = String(value);
+        const neutralized = /^[=+\-@]/.test(text) ? `'${text}` : text;
+        return `"${neutralized.replace(/"/g, '""')}"`;
+      };
       const header = ['Date', 'Time', 'Title', 'Subtitle', 'Type', 'Amount', 'Currency', 'Status'];
       const rows = filteredTransactions.map((tx) => [
-        tx.date,
-        tx.time,
-        tx.title,
-        tx.subtitle,
-        tx.type,
+        csvCell(tx.date),
+        csvCell(tx.time),
+        csvCell(tx.title),
+        csvCell(tx.subtitle),
+        csvCell(tx.type),
+        // Amount stays a raw number so spreadsheets keep it numeric.
         String(tx.amount),
-        tx.currencySymbol ?? 'USD',
-        tx.status,
+        csvCell(tx.currencySymbol ?? 'USD'),
+        csvCell(tx.status),
       ]);
-      const csv = [header, ...rows]
-        .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      const csv = [header.map(csvCell), ...rows]
+        .map((row) => row.join(','))
         .join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      // BOM so spreadsheet software infers UTF-8 for non-ASCII text.
+      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

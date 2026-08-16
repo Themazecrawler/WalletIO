@@ -7,6 +7,11 @@ import {defineConfig, type Plugin} from 'vite';
  * Content-Security-Policy injected into the production build only.
  * Dev mode needs the relaxed React-refresh preamble, so the strict
  * policy applies to the artifact users actually download.
+ *
+ * Note: `frame-ancestors` is deliberately absent — it is only honored in an
+ * HTTP response header, not a <meta> tag. Hosting must add the full policy
+ * (including `frame-ancestors 'none'`) via a `Content-Security-Policy`
+ * response header for real clickjacking protection (see README).
  */
 const CSP = [
   "default-src 'self'",
@@ -17,7 +22,6 @@ const CSP = [
   "connect-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
-  "frame-ancestors 'none'",
 ].join('; ');
 
 function cspPlugin(): Plugin {

@@ -35,6 +35,9 @@ const EXPLORER_BY_NETWORK: Record<string, string> = {
   'Base Network': 'https://basescan.org/address/',
   Optimism: 'https://optimistic.etherscan.io/address/',
   Polygon: 'https://polygonscan.com/address/',
+  // The network switcher uses 'Solana'; the Phantom wallet entry reports
+  // 'Solana Mainnet' — both must map to Solscan.
+  'Solana Mainnet': 'https://solscan.io/address/',
   Solana: 'https://solscan.io/address/',
 };
 

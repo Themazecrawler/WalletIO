@@ -9,13 +9,17 @@ interface TwoFactorVerificationModalProps {
   /** Fired when the user cancels. */
   onClose: () => void;
   showNotification: (msg: string) => void;
+  /** For destructive actions (e.g. disabling security), skip the biometric
+   * shortcut and demand the 6-digit authenticator code specifically. */
+  requireCode?: boolean;
 }
 
 export default function TwoFactorVerificationModal({
   title,
   onAuthorized,
   onClose,
-  showNotification
+  showNotification,
+  requireCode = false
 }: TwoFactorVerificationModalProps) {
   const { securityState } = useWallet();
   const [isScanning, setIsScanning] = useState(false);
@@ -23,7 +27,7 @@ export default function TwoFactorVerificationModal({
   // Choosing the code input for this verification is a local UI choice — it
   // must NOT mutate the user's security settings.
   const [useCodeInput, setUseCodeInput] = useState(false);
-  const showBiometric = securityState.biometricUnlock && !useCodeInput;
+  const showBiometric = securityState.biometricUnlock && !requireCode && !useCodeInput;
 
   return (
     <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 select-none animate-fade-in">

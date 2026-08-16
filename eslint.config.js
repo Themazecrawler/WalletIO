@@ -8,22 +8,31 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // Browser code: the whole app + tests run in the browser/jsdom. Only
+    // browser globals are available, so Node-only identifiers (process,
+    // Buffer, __dirname) in src are flagged by no-undef.
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
-      globals: { ...globals.browser, ...globals.node },
+      globals: { ...globals.browser },
     },
     plugins: { 'react-hooks': reactHooks },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      'no-undef': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/no-explicit-any': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
+    },
+  },
+  {
+    // Node-side tooling: build/vitest configs run in Node.
+    files: ['*.config.{js,ts}', 'eslint.config.js'],
+    languageOptions: {
+      globals: { ...globals.node },
     },
   },
 );

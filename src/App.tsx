@@ -23,6 +23,7 @@ import QRScannerModal from './modals/QRScannerModal';
 import TwoFactorOnboardingModal from './modals/TwoFactorOnboardingModal';
 import TwoFactorVerificationModal from './modals/TwoFactorVerificationModal';
 import { useHashRoute } from './router';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { SecurityHubState } from './types';
 
 // --- Session persistence (auth stage + web3 connection) -------------------
@@ -48,8 +49,9 @@ function hydrateSession(): Partial<SessionState> {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Partial<SessionState>;
-    // Expired sessions are discarded so the user is forced back through auth.
-    if (typeof parsed.expiresAt === 'number' && Date.now() > parsed.expiresAt) {
+    // Sessions without a deadline (pre-hardening records) or past their
+    // deadline are discarded so the user is forced back through auth.
+    if (typeof parsed.expiresAt !== 'number' || Date.now() > parsed.expiresAt) {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       return {};
     }
@@ -63,6 +65,7 @@ function hydrateSession(): Partial<SessionState> {
     if (parsed.walletName === null || typeof parsed.walletName === 'string') {
       out.walletName = parsed.walletName;
     }
+    out.expiresAt = parsed.expiresAt;
     return out;
   } catch {
     return {};
@@ -82,6 +85,8 @@ function WalletApp() {
   const [walletAddress, setWalletAddress] = useState<string | null>(initialSession.walletAddress ?? null);
   const [walletNetwork, setWalletNetwork] = useState<string>(initialSession.walletNetwork ?? 'Ethereum');
   const [walletName, setWalletName] = useState<string | null>(initialSession.walletName ?? null);
+  // Deadline the live expiry timer enforces; refreshed on every session write.
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(initialSession.expiresAt ?? null);
 
   useEffect(() => {
     try {
@@ -93,13 +98,18 @@ function WalletApp() {
           walletAddress,
           walletNetwork,
           walletName,
-          expiresAt: Date.now() + SESSION_TTL_MS,
+          // Deadline is fixed at login and never extended by later activity,
+          // so a reload can't reset an authenticated session's expiry clock.
+          expiresAt:
+            authStage === 'authenticated' && sessionExpiresAt !== null
+              ? sessionExpiresAt
+              : Date.now() + SESSION_TTL_MS,
         }),
       );
     } catch {
       // Storage unavailable — session just won't persist.
     }
-  }, [authStage, isWalletConnected, walletAddress, walletNetwork, walletName]);
+  }, [authStage, isWalletConnected, walletAddress, walletNetwork, walletName, sessionExpiresAt]);
 
   const isAuthenticated = authStage === 'authenticated';
 
@@ -112,6 +122,40 @@ function WalletApp() {
     }, 4000);
   }, []);
 
+  // Live session expiry: an authenticated tab must not stay usable past the
+  // deadline. Re-check on a timer and whenever the tab regains focus.
+  useEffect(() => {
+    if (authStage !== 'authenticated' || sessionExpiresAt === null) return;
+    const checkExpiry = () => {
+      if (Date.now() >= sessionExpiresAt) {
+        setAuthStage('signin');
+        setIsWalletConnected(false);
+        setWalletAddress(null);
+        setWalletName(null);
+        void supabase?.auth.signOut();
+        showNotification('Session expired. Please sign in again.');
+      }
+    };
+    const timer = setTimeout(checkExpiry, Math.max(0, sessionExpiresAt - Date.now()));
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkExpiry();
+    };
+    const onFocus = () => checkExpiry();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [authStage, sessionExpiresAt, showNotification]);
+
+  // Marks the moment authentication begins and fixes the session deadline.
+  const beginAuthenticatedSession = useCallback(() => {
+    setAuthStage('authenticated');
+    setSessionExpiresAt(Date.now() + SESSION_TTL_MS);
+  }, []);
+
   // Social auth overlay
   const [socialAuthLoading, setSocialAuthLoading] = useState<string | null>(null);
   const handleSocialLogin = useCallback(
@@ -120,22 +164,24 @@ function WalletApp() {
       showNotification(`Initializing handshake with secure ${provider} ID enclave...`);
       setTimeout(() => {
         setSocialAuthLoading(null);
-        setAuthStage('authenticated');
+        beginAuthenticatedSession();
         navigate('vault');
         showNotification(`Decrypted profile via secure ${provider} signature.`);
       }, 2000);
     },
-    [navigate, showNotification],
+    [beginAuthenticatedSession, navigate, showNotification],
   );
 
   // 2FA orchestration
   const [twoFAVerificationTitle, setTwoFAVerificationTitle] = useState('');
+  const [twoFARequireCode, setTwoFARequireCode] = useState(false);
   const [pending2FAAction, setPending2FAAction] = useState<(() => void) | null>(null);
 
   const request2FA = useCallback(
-    (action: () => void, title: string) => {
+    (action: () => void, title: string, opts?: { requireCode?: boolean }) => {
       setPending2FAAction(() => action);
       setTwoFAVerificationTitle(title);
+      setTwoFARequireCode(opts?.requireCode ?? false);
       modals.open('twoFAVerification');
     },
     [modals],
@@ -156,35 +202,56 @@ function WalletApp() {
 
   // Auth flows
   const handleSignIn = useCallback(
-    (email: string) => {
+    async (email: string, password: string) => {
       const proceedWithLogin = () => {
-        setAuthStage('authenticated');
+        beginAuthenticatedSession();
         navigate('vault');
         showNotification(`Logged in as: ${email}`);
       };
 
+      // Real backend path: verify credentials server-side first.
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          showNotification(`Sign-in failed: ${error.message}`);
+          return;
+        }
+      }
+
+      // Second factor (simulated TOTP/biometric gate until real MFA lands).
       if (securityState.twoFactorProtocol) {
         request2FA(proceedWithLogin, 'Verify Sign In Attempt');
       } else {
         proceedWithLogin();
       }
     },
-    [securityState.twoFactorProtocol, request2FA, navigate, showNotification],
+    [securityState.twoFactorProtocol, request2FA, beginAuthenticatedSession, navigate, showNotification],
   );
 
   const handleBiometricLogin = useCallback(
     (type: 'fingerprint' | 'face') => {
-      setAuthStage('authenticated');
+      beginAuthenticatedSession();
       navigate('vault');
       showNotification(`Session authenticated via ${type === 'face' ? 'Face ID' : 'fingerprint'} scan.`);
     },
-    [navigate, showNotification],
+    [beginAuthenticatedSession, navigate, showNotification],
   );
 
   // Sign-up: prefill the email for the next sign-in, then force 2FA onboarding
   const [prefillEmail, setPrefillEmail] = useState<string | null>(null);
   const handleSignUpValid = useCallback(
-    (username: string, email: string) => {
+    async (username: string, email: string, password: string) => {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: username } },
+        });
+        if (error) {
+          showNotification(`Sign-up failed: ${error.message}`);
+          return;
+        }
+      }
       setPrefillEmail(email);
       modals.open('twoFAOnboarding');
       showNotification(`Account created successfully for ${username}. Please configure account protection.`);
@@ -196,7 +263,7 @@ function WalletApp() {
     (state: SecurityHubState) => {
       dispatch({ type: 'SET_SECURITY', state });
       modals.close('twoFAOnboarding');
-      setAuthStage('authenticated');
+      beginAuthenticatedSession();
       navigate('vault');
       const msg = state.biometricUnlock
         ? 'Biometrics linked! Authenticated successfully.'
@@ -205,7 +272,7 @@ function WalletApp() {
           : 'Account created. Remember to configure 2FA later in Security Hub.';
       showNotification(msg);
     },
-    [dispatch, modals, navigate, showNotification],
+    [dispatch, modals, beginAuthenticatedSession, navigate, showNotification],
   );
 
   // Security preferences toggling.
@@ -223,6 +290,7 @@ function WalletApp() {
             showNotification(`${label} has been DISABLED.`);
           },
           `Disable ${label}`,
+          { requireCode: true },
         );
         showNotification(`Confirm your identity to disable ${label}.`);
       } else {
@@ -240,6 +308,7 @@ function WalletApp() {
     setIsWalletConnected(false);
     setWalletAddress(null);
     setWalletName(null);
+    void supabase?.auth.signOut();
     showNotification('Session successfully de-authenticated. Secure Chip locked.');
   }, [showNotification]);
 
@@ -383,7 +452,10 @@ function WalletApp() {
           {authStage === 'reset' && (
             <ResetScreen
               onBack={() => setAuthStage('signin')}
-              onReset={() => {
+              onReset={(email) => {
+                if (isSupabaseConfigured && supabase) {
+                  void supabase.auth.resetPasswordForEmail(email);
+                }
                 setAuthStage('signin');
                 showNotification('A password reset link has been sent to your email.');
               }}
@@ -482,6 +554,7 @@ function WalletApp() {
           twoFAVerification: (
             <TwoFactorVerificationModal
               title={twoFAVerificationTitle}
+              requireCode={twoFARequireCode}
               onAuthorized={handle2FAAuthorized}
               onClose={handle2FACancel}
               showNotification={showNotification}

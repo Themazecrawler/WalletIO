@@ -2,20 +2,21 @@ import React, { useState } from 'react';
 import { Bolt, CheckCircle2, Loader2, Plus, QrCode } from 'lucide-react';
 import { CONTACTS } from '../data';
 import { Contact, Transaction } from '../types';
+import { useWallet } from '../store/walletStore';
 
 interface TransfersProps {
-  onAddTransaction: (tx: Transaction) => void;
   onShowNotification: (msg: string) => void;
-  onSettleTransfer: (amount: number) => void;
   onScanQRCode: () => void;
-  is2FAActive: boolean;
   onRequest2FA: (action: () => void, title: string) => void;
 }
 
-export default function Transfers({ onAddTransaction, onShowNotification, onSettleTransfer, onScanQRCode, is2FAActive, onRequest2FA }: TransfersProps) {
+export default function Transfers({ onShowNotification, onScanQRCode, onRequest2FA }: TransfersProps) {
+  const { securityState, liquidityBalance, dispatch } = useWallet();
   const [selectedContact, setSelectedContact] = useState<Contact>(CONTACTS[0]);
   const [enteringAmount, setEnteringAmount] = useState('0.00');
   const [beamState, setBeamState] = useState<'idle' | 'beaming' | 'success'>('idle');
+
+  const is2FAActive = securityState.twoFactorProtocol;
 
   const handleNumClick = (digit: string) => {
     if (beamState !== 'idle') return;
@@ -54,11 +55,17 @@ export default function Transfers({ onAddTransaction, onShowNotification, onSett
 
     const executeBeam = () => {
       setBeamState('beaming');
-      
+
       // Simulate high-tech encryption secure tunnel setup and beaming
       setTimeout(() => {
         setBeamState('success');
-        onSettleTransfer(amountVal);
+
+        // Settle the beam against USD liquidity
+        const newBal = liquidityBalance - amountVal;
+        if (newBal < 0) {
+          onShowNotification('Warning: Cash balance is negative, system overdrawn limit adjusted.');
+        }
+        dispatch({ type: 'SET_LIQUIDITY', balance: newBal });
 
         // Create a transaction record
         const newTx: Transaction = {
@@ -73,7 +80,7 @@ export default function Transfers({ onAddTransaction, onShowNotification, onSett
           type: 'outbound',
           iconName: 'bolt'
         };
-        onAddTransaction(newTx);
+        dispatch({ type: 'ADD_TRANSACTION', transaction: newTx });
 
         // Notify
         onShowNotification(`Successfully beamed $${amountVal.toFixed(2)} to ${selectedContact.name} securely!`);
@@ -83,12 +90,11 @@ export default function Transfers({ onAddTransaction, onShowNotification, onSett
           setEnteringAmount('0.00');
           setBeamState('idle');
         }, 2000);
-
       }, 2500);
     };
 
     if (is2FAActive) {
-      onRequest2FA(executeBeam, "Authorize Outbound Beam");
+      onRequest2FA(executeBeam, 'Authorize Outbound Beam');
     } else {
       executeBeam();
     }
@@ -96,13 +102,12 @@ export default function Transfers({ onAddTransaction, onShowNotification, onSett
 
   return (
     <div className="flex flex-col gap-6 p-6 animate-fade-in pb-10">
-      
       {/* Top Section / Header */}
       <section className="flex flex-col gap-3">
         <div className="flex justify-between items-center">
           <h2 className="font-display text-xl font-bold text-slate-100">Transfers</h2>
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={onScanQRCode}
               className="flex items-center gap-1 px-2 py-1 rounded-lg border border-cyan-500/30 bg-cyan-950/20 text-cyan-400 hover:border-cyan-400 font-mono text-[9px] font-semibold active:scale-95 transition-all cursor-pointer"
               title="Scan recipient's address QR Code"
@@ -129,14 +134,14 @@ export default function Transfers({ onAddTransaction, onShowNotification, onSett
                 }`}
               >
                 <div className={`w-14 h-14 rounded-full p-0.5 relative transition-transform duration-300 group-active:scale-95 ${
-                  isSelected 
-                    ? 'border-2 border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.4)]' 
+                  isSelected
+                    ? 'border-2 border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.4)]'
                     : 'border border-zinc-800'
                 }`}>
-                  <img 
-                    className="w-full h-full rounded-full object-cover" 
-                    alt={contact.name} 
-                    src={contact.avatarUrl} 
+                  <img
+                    className="w-full h-full rounded-full object-cover"
+                    alt={contact.name}
+                    src={contact.avatarUrl}
                   />
                   {contact.active && (
                     <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-[#0a0b10]" />
@@ -200,7 +205,7 @@ export default function Transfers({ onAddTransaction, onShowNotification, onSett
 
       {/* Action / Beam Trigger button */}
       <div className="flex flex-col gap-3.5 mt-2">
-        <button 
+        <button
           onClick={handleSecureBeam}
           disabled={beamState !== 'idle'}
           className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2.5 shadow-lg select-none outline-none font-semibold transition-all duration-300 ${
@@ -237,7 +242,6 @@ export default function Transfers({ onAddTransaction, onShowNotification, onSett
           Encrypted P2P tunnel active • ZERO network settlement fees
         </p>
       </div>
-
     </div>
   );
 }

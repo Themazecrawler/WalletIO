@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Wallet, Bolt, Flame, Eye, EyeOff, PlusCircle, ArrowUpRight, CheckCircle2, Clock } from 'lucide-react';
 import { Transaction } from '../types';
+import { formatUsd } from '../lib/format';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -138,7 +139,7 @@ export default function Dashboard({
                 </button>
               </div>
               <h2 className="font-display text-3xl leading-tight font-bold text-slate-100 tracking-tight drop-shadow-[0_0_12px_rgba(0,240,255,0.3)]">
-                {hideBalance ? '••••••' : `$${portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                {hideBalance ? '••••••' : `$${formatUsd(portfolioValue)}`}
               </h2>
             </div>
             
@@ -219,7 +220,7 @@ export default function Dashboard({
                 PORTFOLIO VALUE @ {activePoint.label}
               </p>
               <h4 className="font-display text-2xl font-bold text-slate-100 tracking-tight">
-                {hideBalance ? '••••••' : `$${activePoint.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                {hideBalance ? '••••••' : `$${formatUsd(activePoint.value)}`}
               </h4>
             </div>
             

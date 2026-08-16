@@ -60,6 +60,9 @@ const Shuffle: React.FC<ShuffleProps> = ({
   const ref = useRef<HTMLElement>(null);
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [ready, setReady] = useState(false);
+  // Guards against double-firing the animation when it is triggered both
+  // immediately (element already in view) and by ScrollTrigger on refresh.
+  const enteredRef = useRef(false);
 
   // Using custom, club-free split representation
   const splitRef = useRef<{ revert: () => void; chars: HTMLElement[] } | null>(null);
@@ -88,6 +91,9 @@ const Shuffle: React.FC<ShuffleProps> = ({
     () => {
       if (!ref.current || !text || !fontsLoaded) return;
       if (respectReducedMotion && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        // Show the static text instead of animating it; otherwise the
+        // .shuffle-parent visibility:hidden rule would keep it invisible.
+        setReady(true);
         onShuffleComplete?.();
         return;
       }
@@ -399,13 +405,36 @@ const Shuffle: React.FC<ShuffleProps> = ({
         trigger: el,
         start,
         once: triggerOnce,
-        onEnter: create
+        onEnter: () => {
+          enteredRef.current = true;
+          create();
+        },
+        onLeave: () => {
+          enteredRef.current = false;
+        }
       });
+
+      // If the element is already visible at load but ScrollTrigger's start
+      // line has not been reached (e.g. content inside a fixed phone frame
+      // where the window never scrolls), fire the animation immediately so
+      // the text is not left permanently hidden.
+      const rect = el.getBoundingClientRect();
+      const viewportH = window.innerHeight || document.documentElement.clientHeight;
+      if (rect.top < viewportH && rect.bottom > 0 && !enteredRef.current) {
+        const startPx = st.start;
+        const scrollY = window.scrollY || window.pageYOffset || 0;
+        const notYetReached = typeof startPx !== 'number' || startPx > scrollY;
+        if (notYetReached) {
+          enteredRef.current = true;
+          create();
+        }
+      }
 
       return () => {
         st.kill();
         removeHover();
         teardown();
+        enteredRef.current = false;
         setReady(false);
       };
     },

@@ -113,7 +113,6 @@ export const INITIAL_ASSETS: CryptoAsset[] = [
     name: 'Bitcoin',
     symbol: 'BTC',
     balance: 1.248,
-    priceUsd: 53878.30, // 1.248 BTC * 53,878.3 = $67,240.12
     change24h: 2.15,
     sparkline: [30, 10, 25, 15, 35, 10, 20],
     icon: 'currency_bitcoin',
@@ -126,7 +125,6 @@ export const INITIAL_ASSETS: CryptoAsset[] = [
     name: 'Ethereum',
     symbol: 'ETH',
     balance: 18.52,
-    priceUsd: 3412.80, // 18.52 ETH * 3412.8 = $63,205.05
     change24h: -0.45,
     sparkline: [20, 35, 10, 25, 5, 15, 10],
     icon: 'token',
@@ -135,11 +133,10 @@ export const INITIAL_ASSETS: CryptoAsset[] = [
     textClass: 'text-[#00f0ff]'
   },
   {
-    id: 'asset-aur',
+    id: 'asset-wio',
     name: 'WalletIO Coin',
     symbol: 'WIO',
     balance: 66998,
-    priceUsd: 0.18, // 66,998 WIO * 0.18 = $12,059.64
     change24h: 12.4,
     sparkline: [35, 32, 30, 22, 25, 15, 18, 10, 12, 2, 5],
     icon: 'stream',
